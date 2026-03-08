@@ -13,6 +13,9 @@ import pyarrow.parquet as pq
 import pyarrow as pa
 import logging
 from functools import wraps
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Configurar logging
 logging.basicConfig(
@@ -37,10 +40,10 @@ CORS(app)
 #BACKUP_DIR = '../backups'
 #ERROR_LOG_FILE = '../logs/data_errors.log'
 #docker
-DB_SERVER = os.getenv('DB_SERVER', 'sqlserver')
-DB_NAME = os.getenv('DB_NAME', 'challenge')
-DB_USER = os.getenv('DB_USER', 'sa')
-DB_PASSWORD = os.getenv('DB_PASSWORD', 'Your_Password123!')
+DB_SERVER = os.getenv('DB_SERVER')
+DB_NAME = os.getenv('DB_NAME')
+DB_USER = os.getenv('DB_USER')
+DB_PASSWORD = os.getenv('DB_PASSWORD')
 
 BACKUP_DIR = '/app/backups'
 ERROR_LOG_FILE = '/app/logs/data_errors.log'

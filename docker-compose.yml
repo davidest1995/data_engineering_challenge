@@ -6,14 +6,16 @@ services:
       - "1433:1433"
     environment:
       - ACCEPT_EULA=Y
-      - SA_PASSWORD=Your_Password123!
+      - SA_PASSWORD=${DB_PASSWORD}
+    env_file:
+      - .env
     volumes:
       - ./database:/var/opt/mssql
     networks:
       - globant-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "/opt/mssql-tools/bin/sqlcmd", "-U", "sa", "-P", "Your_Password123!", "-Q", "SELECT 1"]
+      test: ["CMD", "/opt/mssql-tools/bin/sqlcmd", "-U", "${DB_USER}", "-P", "${DB_PASSWORD}", "-Q", "SELECT 1"]
       interval: 15s
       timeout: 10s
       retries: 5
@@ -33,10 +35,8 @@ services:
     environment:
       - FLASK_APP=app.py
       - FLASK_ENV=production
-      - DB_SERVER=sqlserver
-      - DB_NAME=challenge
-      - DB_USER=sa
-      - DB_PASSWORD=Your_Password123!
+    env_file:
+      - .env
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -61,11 +61,8 @@ services:
       - ./database:/app/database
       - ./logs:/app/logs
       - ./backups:/app/backups
-    environment:
-      - DB_SERVER=sqlserver
-      - DB_NAME=challenge
-      - DB_USER=sa
-      - DB_PASSWORD=Your_Password123!
+    env_file:
+      - .env
     networks:
       - globant-network
     depends_on:

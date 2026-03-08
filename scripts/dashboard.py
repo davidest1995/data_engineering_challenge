@@ -9,6 +9,9 @@ import plotly.graph_objects as go
 import pyodbc
 import os
 from datetime import datetime
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ==================== CONFIGURACIÓN ====================
 st.set_page_config(
@@ -126,10 +129,10 @@ st.markdown(f"""
 # ==================== FUNCIONES ====================
 def get_db_connection():
     """Conectar a la BD"""
-    db_server = os.getenv('DB_SERVER', 'sqlserver')
-    db_name = os.getenv('DB_NAME', 'challenge')
-    db_user = os.getenv('DB_USER', 'sa')
-    db_password = os.getenv('DB_PASSWORD', 'Your_Password123!')
+    db_server = os.getenv('DB_SERVER')
+    db_name = os.getenv('DB_NAME')
+    db_user = os.getenv('DB_USER')
+    db_password = os.getenv('DB_PASSWORD')
     
     conn_str = f'DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={db_server};DATABASE={db_name};UID={db_user};PWD={db_password};TrustServerCertificate=yes'
     conn = pyodbc.connect(conn_str)
