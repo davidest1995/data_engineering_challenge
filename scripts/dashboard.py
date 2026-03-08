@@ -6,7 +6,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import sqlite3
+import pyodbc
 import os
 from datetime import datetime
 
@@ -126,13 +126,13 @@ st.markdown(f"""
 # ==================== FUNCIONES ====================
 def get_db_connection():
     """Conectar a la BD"""
-    db_path = '/app/database/challenge.db'
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    #local
-    #conn = sqlite3.connect('../database/challenge.db', check_same_thread=False)
+    db_server = os.getenv('DB_SERVER', 'sqlserver')
+    db_name = os.getenv('DB_NAME', 'challenge')
+    db_user = os.getenv('DB_USER', 'sa')
+    db_password = os.getenv('DB_PASSWORD', 'Your_Password123!')
     
-    #docker
-    conn = sqlite3.connect(db_path, check_same_thread=False)
+    conn_str = f'DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={db_server};DATABASE={db_name};UID={db_user};PWD={db_password};TrustServerCertificate=yes'
+    conn = pyodbc.connect(conn_str)
     return conn
 
 @st.cache_data(ttl=5)

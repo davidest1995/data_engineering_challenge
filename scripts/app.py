@@ -6,7 +6,7 @@ Maneja: Carga de CSV, Inserción en BD, Backup/Restore, Análisis
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import pandas as pd
-import sqlite3
+import pyodbc
 import os
 from datetime import datetime
 import pyarrow.parquet as pq
@@ -37,7 +37,11 @@ CORS(app)
 #BACKUP_DIR = '../backups'
 #ERROR_LOG_FILE = '../logs/data_errors.log'
 #docker
-DB_PATH = '/app/database/challenge.db'
+DB_SERVER = os.getenv('DB_SERVER', 'sqlserver')
+DB_NAME = os.getenv('DB_NAME', 'challenge')
+DB_USER = os.getenv('DB_USER', 'sa')
+DB_PASSWORD = os.getenv('DB_PASSWORD', 'Your_Password123!')
+
 BACKUP_DIR = '/app/backups'
 ERROR_LOG_FILE = '/app/logs/data_errors.log'
 
@@ -52,42 +56,53 @@ os.makedirs(BACKUP_DIR, exist_ok=True)
 
 # ==================== UTILIDADES ====================
 
-def get_db_connection():
+def get_db_connection(use_database=True):
     """Obtener conexión a la BD"""
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
+    db = DB_NAME if use_database else 'master'
+    conn_str = f'DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={DB_SERVER};DATABASE={db};UID={DB_USER};PWD={DB_PASSWORD};TrustServerCertificate=yes'
+    conn = pyodbc.connect(conn_str, autocommit=not use_database)
     return conn
-
 
 def init_database():
     """Inicializar la base de datos con las tablas"""
+    try:
+        conn = get_db_connection(use_database=False)
+        cursor = conn.cursor()
+        cursor.execute(f"IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = '{DB_NAME}') BEGIN CREATE DATABASE {DB_NAME} END")
+        conn.close()
+    except Exception as e:
+        logger.warning(f"No se pudo crear la base de datos (quizá ya existe o no hay acceso master): {e}")
+
     conn = get_db_connection()
     cursor = conn.cursor()
     
     # Tabla de Departamentos
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS departments (
-            id INTEGER PRIMARY KEY,
-            department TEXT NOT NULL UNIQUE
+        IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='departments' and xtype='U')
+        CREATE TABLE departments (
+            id INT PRIMARY KEY,
+            department NVARCHAR(255) NOT NULL UNIQUE
         )
     ''')
     
     # Tabla de Trabajos
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS jobs (
-            id INTEGER PRIMARY KEY,
-            job TEXT NOT NULL UNIQUE
+        IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='jobs' and xtype='U')
+        CREATE TABLE jobs (
+            id INT PRIMARY KEY,
+            job NVARCHAR(255) NOT NULL UNIQUE
         )
     ''')
     
     # Tabla de Empleados Contratados
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS hired_employees (
-            id INTEGER PRIMARY KEY,
-            name TEXT NOT NULL,
-            datetime TEXT NOT NULL,
-            department_id INTEGER NOT NULL,
-            job_id INTEGER NOT NULL,
+        IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='hired_employees' and xtype='U')
+        CREATE TABLE hired_employees (
+            id INT PRIMARY KEY,
+            name NVARCHAR(255) NOT NULL,
+            datetime NVARCHAR(255) NOT NULL,
+            department_id INT NOT NULL,
+            job_id INT NOT NULL,
             FOREIGN KEY (department_id) REFERENCES departments(id),
             FOREIGN KEY (job_id) REFERENCES jobs(id)
         )
@@ -257,7 +272,7 @@ def upload_csv():
                             (int(data['id']), data['job'])
                         )
                     inserted += 1
-                except sqlite3.IntegrityError as e:
+                except pyodbc.IntegrityError as e:
                     log_error(table_type, idx + 1, f'Error de BD: {str(e)}', data)
                     failed += 1
             else:
@@ -347,7 +362,7 @@ def insert_batch(table: str):
                             (record['id'], record['job'])
                         )
                     inserted += 1
-                except sqlite3.IntegrityError as e:
+                except pyodbc.IntegrityError as e:
                     log_error(table, idx, str(e), record)
                     failed += 1
                     errors.append(f"Registro {idx}: {str(e)}")
@@ -482,17 +497,25 @@ def employees_by_quarter():
             d.department,
             j.job,
             CASE 
-                WHEN strftime('%m', he.datetime) IN ('01', '02', '03') THEN 'Q1'
-                WHEN strftime('%m', he.datetime) IN ('04', '05', '06') THEN 'Q2'
-                WHEN strftime('%m', he.datetime) IN ('07', '08', '09') THEN 'Q3'
-                WHEN strftime('%m', he.datetime) IN ('10', '11', '12') THEN 'Q4'
+                WHEN SUBSTRING(he.datetime, 6, 2) IN ('01', '02', '03') THEN 'Q1'
+                WHEN SUBSTRING(he.datetime, 6, 2) IN ('04', '05', '06') THEN 'Q2'
+                WHEN SUBSTRING(he.datetime, 6, 2) IN ('07', '08', '09') THEN 'Q3'
+                WHEN SUBSTRING(he.datetime, 6, 2) IN ('10', '11', '12') THEN 'Q4'
             END as quarter,
             COUNT(*) as count
         FROM hired_employees he
         JOIN departments d ON he.department_id = d.id
         JOIN jobs j ON he.job_id = j.id
-        WHERE strftime('%Y', he.datetime) = '2021'
-        GROUP BY d.department, j.job, quarter
+        WHERE SUBSTRING(he.datetime, 1, 4) = '2021'
+        GROUP BY 
+            d.department, 
+            j.job, 
+            CASE 
+                WHEN SUBSTRING(he.datetime, 6, 2) IN ('01', '02', '03') THEN 'Q1'
+                WHEN SUBSTRING(he.datetime, 6, 2) IN ('04', '05', '06') THEN 'Q2'
+                WHEN SUBSTRING(he.datetime, 6, 2) IN ('07', '08', '09') THEN 'Q3'
+                WHEN SUBSTRING(he.datetime, 6, 2) IN ('10', '11', '12') THEN 'Q4'
+            END
         ORDER BY d.department ASC, j.job ASC, quarter ASC
         '''
         
@@ -554,7 +577,7 @@ def departments_above_mean():
             COUNT(*) as hired
         FROM hired_employees he
         JOIN departments d ON he.department_id = d.id
-        WHERE strftime('%Y', he.datetime) = '2021'
+        WHERE SUBSTRING(he.datetime, 1, 4) = '2021'
         GROUP BY d.id, d.department
         '''
         
@@ -608,7 +631,7 @@ def status():
         
         return jsonify({
             'status': 'OK',
-            'database': DB_PATH,
+            'database': DB_NAME,
             'tables': tables_info
         }), 200
         

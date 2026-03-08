@@ -8,3 +8,4 @@ python-dotenv==1.0.0
 numpy==1.26.4
 streamlit==1.55.0
 plotly==6.6.0
+pyodbc==5.1.0

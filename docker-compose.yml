@@ -1,4 +1,24 @@
 services:
+  sqlserver:
+    image: mcr.microsoft.com/azure-sql-edge
+    container_name: globant-sqlserver
+    ports:
+      - "1433:1433"
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=Your_Password123!
+    volumes:
+      - ./database:/var/opt/mssql
+    networks:
+      - globant-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/opt/mssql-tools/bin/sqlcmd", "-U", "sa", "-P", "Your_Password123!", "-Q", "SELECT 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
   api:
     build:
       context: .
@@ -13,6 +33,13 @@ services:
     environment:
       - FLASK_APP=app.py
       - FLASK_ENV=production
+      - DB_SERVER=sqlserver
+      - DB_NAME=challenge
+      - DB_USER=sa
+      - DB_PASSWORD=Your_Password123!
+    depends_on:
+      sqlserver:
+        condition: service_healthy
     networks:
       - globant-network
     restart: unless-stopped
@@ -35,11 +62,16 @@ services:
       - ./logs:/app/logs
       - ./backups:/app/backups
     environment:
-      - DATABASE_PATH=/app/database/challenge.db
+      - DB_SERVER=sqlserver
+      - DB_NAME=challenge
+      - DB_USER=sa
+      - DB_PASSWORD=Your_Password123!
     networks:
       - globant-network
     depends_on:
       api:
+        condition: service_healthy
+      sqlserver:
         condition: service_healthy
     restart: unless-stopped
 
