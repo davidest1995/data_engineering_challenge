@@ -1,0 +1,32 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Instalar dependencias del sistema
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copiar requirements
+COPY requirements.txt .
+
+# Instalar dependencias Python
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copiar archivos de la aplicación
+COPY scripts/app.py .
+COPY scripts/load_csv.py .
+COPY scripts/test_api.py .
+COPY data/departments.csv ./data/
+COPY data/jobs.csv ./data/
+COPY data/hired_employees.csv ./data/
+
+# Crear directorios necesarios
+RUN mkdir -p /app/database /app/logs /app/backups
+
+# Exponer puerto
+EXPOSE 5001
+
+# Comando para ejecutar la API
+CMD ["python", "app.py"]

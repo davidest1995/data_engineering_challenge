@@ -1,0 +1,5 @@
+docker-compose build --no-cache
+docker-compose up -d --build
+docker-compose exec api python load_csv.py
+docker-compose exec api python test_api.py
+docker-compose down

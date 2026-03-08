@@ -1,0 +1,7 @@
+.venv/
+backups/
+database/
+logs/
+
+.DS_Store
+Thumbs.db
