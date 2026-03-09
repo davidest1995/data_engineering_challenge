@@ -22,6 +22,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copiar archivos de la aplicación
 COPY scripts/dashboard.py .
+COPY .streamlit .streamlit
 
 # Crear directorios necesarios
 RUN mkdir -p /app/database /app/logs /app/backups
