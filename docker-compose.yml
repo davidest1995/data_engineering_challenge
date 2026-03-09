@@ -63,6 +63,8 @@ services:
       - ./backups:/app/backups
     env_file:
       - .env
+    environment:
+      - API_BASE_URL=http://globant-api:5001
     networks:
       - globant-network
     depends_on:

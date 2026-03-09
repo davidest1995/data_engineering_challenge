@@ -6,12 +6,8 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import pyodbc
+import requests
 import os
-from datetime import datetime
-from dotenv import load_dotenv
-
-load_dotenv()
 
 # ==================== CONFIGURACIÓN ====================
 st.set_page_config(
@@ -142,72 +138,52 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# ==================== FUNCIONES ====================
-def get_db_connection():
-    """Conectar a la BD"""
-    db_server = os.getenv('DB_SERVER')
-    db_name = os.getenv('DB_NAME')
-    db_user = os.getenv('DB_USER')
-    db_password = os.getenv('DB_PASSWORD')
-    
-    conn_str = f'DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={db_server};DATABASE={db_name};UID={db_user};PWD={db_password};TrustServerCertificate=yes'
-    conn = pyodbc.connect(conn_str)
-    return conn
+# ==================== CONFIGURACIÓN API ====================
+API_BASE_URL = os.getenv('API_BASE_URL', 'http://globant-api:5001')
 
-@st.cache_data(ttl=5)
-def load_data():
-    """Cargar todos los datos de la BD"""
-    conn = get_db_connection()
-    employees = pd.read_sql_query("SELECT * FROM hired_employees", conn)
-    departments = pd.read_sql_query("SELECT * FROM departments", conn)
-    jobs = pd.read_sql_query("SELECT * FROM jobs", conn)
-    conn.close()
-    
-    # Convertir datetime y crear columnas auxiliares
-    employees['datetime'] = pd.to_datetime(employees['datetime'])
-    employees['year'] = employees['datetime'].dt.year
-    employees['month'] = employees['datetime'].dt.month
-    
-    def get_quarter(month):
-        if month in [1,2,3]: return 'Q1'
-        elif month in [4,5,6]: return 'Q2'
-        elif month in [7,8,9]: return 'Q3'
-        else: return 'Q4'
-    
-    employees['quarter'] = employees['month'].apply(get_quarter)
-    
-    return employees, departments, jobs
 
-def get_employees_by_quarter(employees, departments, jobs, year):
-    """Calcular empleados por trimestre para un año específico"""
-    employees_year = employees[employees['year'] == year].copy()
-    if employees_year.empty:
-        return pd.DataFrame(columns=['department', 'job', 'Q1', 'Q2', 'Q3', 'Q4'])
-    
-    merged = employees_year.merge(departments, left_on='department_id', right_on='id')
-    merged = merged.merge(jobs, left_on='job_id', right_on='id')
-    
-    result = merged.groupby(['department', 'job', 'quarter']).size().reset_index(name='count')
-    pivot = result.pivot_table(index=['department','job'], columns='quarter', values='count', fill_value=0).reset_index()
-    
-    for q in ['Q1','Q2','Q3','Q4']:
-        if q not in pivot.columns:
-            pivot[q] = 0
-    
-    pivot = pivot[['department','job','Q1','Q2','Q3','Q4']].sort_values(['department','job'])
-    return pivot
+# ==================== FUNCIONES DE DATOS (vía API REST) ====================
 
-def get_departments_above_mean(employees, departments, year):
-    """Calcular departamentos sobre el promedio para un año específico"""
-    employees_year = employees[employees['year'] == year].copy()
-    if employees_year.empty:
-        return pd.DataFrame(columns=['department', 'hired']), 0
-    
-    dept_counts = employees_year.groupby('department_id').size().reset_index(name='hired')
-    dept_counts = dept_counts.merge(departments, left_on='department_id', right_on='id')
-    mean = dept_counts['hired'].mean()
-    above_mean = dept_counts[dept_counts['hired'] > mean].sort_values('hired', ascending=False)
-    return above_mean, mean
+@st.cache_data(ttl=30)
+def fetch_status():
+    """Obtener estado general de tablas desde la API"""
+    resp = requests.get(f"{API_BASE_URL}/api/status", timeout=10)
+    resp.raise_for_status()
+    return resp.json()
+
+
+@st.cache_data(ttl=30)
+def fetch_years():
+    """Obtener lista de años disponibles desde la API"""
+    resp = requests.get(f"{API_BASE_URL}/api/analytics/years", timeout=10)
+    resp.raise_for_status()
+    return resp.json()['years']
+
+
+@st.cache_data(ttl=30)
+def fetch_employees_by_quarter(year: int = 2021):
+    """Obtener empleados por trimestre desde la API"""
+    resp = requests.get(f"{API_BASE_URL}/api/analytics/employees-by-quarter", params={'year': year}, timeout=10)
+    resp.raise_for_status()
+    data = resp.json()['data']
+    return pd.DataFrame(data)
+
+
+@st.cache_data(ttl=30)
+def fetch_departments_above_mean(year: int = 2021):
+    """Obtener departamentos sobre el promedio desde la API"""
+    resp = requests.get(f"{API_BASE_URL}/api/analytics/departments-above-mean", params={'year': year}, timeout=10)
+    resp.raise_for_status()
+    result = resp.json()
+    return pd.DataFrame(result['data']), result['mean_hired']
+
+
+@st.cache_data(ttl=30)
+def fetch_top_jobs(year: int = 2021):
+    """Obtener top 10 trabajos desde la API"""
+    resp = requests.get(f"{API_BASE_URL}/api/analytics/top-jobs", params={'year': year}, timeout=10)
+    resp.raise_for_status()
+    return pd.DataFrame(resp.json()['data'])
 
 # ==================== HEADER CON LOGO ====================
 st.markdown("""
@@ -218,26 +194,37 @@ st.markdown("""
 
 # ==================== MAIN ====================
 def main():
-    # Cargar datos
+    # ==================== CARGAR STATUS ====================
     try:
-        employees, departments, jobs = load_data()
+        status = fetch_status()
+        tables = status.get('tables', {})
     except Exception as e:
-        st.error(f"❌ Error al cargar datos: {e}. Asegúrate de cargar los CSV primero.")
+        st.error(f"❌ No se puede conectar a la API: {e}. Verifica que el servicio esté activo.")
         return
-    
-    available_years = sorted(employees['year'].unique())
-    if not available_years:
-        st.warning("No hay datos de empleados disponibles.")
+
+    total_employees = tables.get('hired_employees', 0)
+    total_depts     = tables.get('departments', 0)
+    total_jobs      = tables.get('jobs', 0)
+
+    if total_employees == 0:
+        st.warning("No hay datos de empleados. Carga los CSV primero.")
         return
-    
+
     # ==================== SIDEBAR ====================
+    try:
+        available_years = fetch_years()
+    except Exception:
+        available_years = [2021]
+
     with st.sidebar:
-        st.markdown('<div class="sidebar-header">🎯 FILTROS</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sidebar-header">🎯 ANÁLISIS</div>', unsafe_allow_html=True)
+        
         selected_year = st.selectbox(
             "Selecciona el año de análisis:",
             options=available_years,
             index=available_years.index(2021) if 2021 in available_years else 0
         )
+        
         st.markdown("---")
         st.markdown(
             f"""
@@ -248,29 +235,28 @@ def main():
             """,
             unsafe_allow_html=True
         )
-    
+
     # ==================== MÉTRICAS CLAVE ====================
-    employees_year = employees[employees['year'] == selected_year]
-    
     st.markdown("## 📈 MÉTRICAS CLAVE")
-    col1, col2, col3, col4 = st.columns(4)
-    
+    col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("👥 Total Empleados (histórico)", len(employees))
+        st.metric("👥 Total Empleados", total_employees)
     with col2:
-        st.metric("🏢 Departamentos", len(departments))
+        st.metric("🏢 Departamentos", total_depts)
     with col3:
-        st.metric("💼 Trabajos", len(jobs))
-    with col4:
-        st.metric(f"📅 Contrataciones {selected_year}", len(employees_year))
-    
+        st.metric("💼 Trabajos", total_jobs)
+
     st.divider()
     
     # ==================== ANÁLISIS 1: POR TRIMESTRE ====================
-    st.markdown(f"## 📊 ANÁLISIS 1: Empleados por Trimestre ({selected_year})")
+    st.markdown(f"## 📈 ANÁLISIS 1: Empleados por Trimestre ({selected_year})")
     st.write("Distribución de contrataciones por trimestre, departamento y trabajo")
-    
-    quarter_data = get_employees_by_quarter(employees, departments, jobs, selected_year)
+
+    try:
+        quarter_data = fetch_employees_by_quarter(selected_year)
+    except Exception as e:
+        st.error(f"❌ Error al cargar Análisis 1: {e}")
+        quarter_data = pd.DataFrame()
     
     if quarter_data.empty:
         st.info(f"No hay datos de contrataciones para el año {selected_year}.")
@@ -342,8 +328,12 @@ def main():
     
     # ==================== ANÁLISIS 2: SOBRE PROMEDIO ====================
     st.markdown(f"## 🏆 ANÁLISIS 2: Departamentos sobre el Promedio ({selected_year})")
-    
-    above_mean, mean_val = get_departments_above_mean(employees, departments, selected_year)
+
+    try:
+        above_mean, mean_val = fetch_departments_above_mean(selected_year)
+    except Exception as e:
+        st.error(f"❌ Error al cargar Análisis 2: {e}")
+        above_mean, mean_val = pd.DataFrame(), 0
     
     if above_mean.empty:
         st.info(f"No hay suficientes datos para el año {selected_year}.")
@@ -394,21 +384,20 @@ def main():
         st.plotly_chart(fig, use_container_width=True)
     
     # ==================== ANÁLISIS ADICIONAL ====================
-    st.markdown(f"## 📊 ANÁLISIS ADICIONAL ({selected_year})")
+    st.markdown(f"## 📈 ANÁLISIS ADICIONAL ({selected_year})")
     st.subheader("🥇 Top 10 Trabajos más Contratados")
-    
-    if employees_year.empty:
+
+    try:
+        top_jobs_df = fetch_top_jobs(selected_year)
+    except Exception as e:
+        st.error(f"❌ Error al cargar Top Jobs: {e}")
+        top_jobs_df = pd.DataFrame()
+
+    if top_jobs_df.empty:
         st.info(f"No hay contrataciones en {selected_year}.")
     else:
-        top_jobs = employees_year.merge(jobs, left_on='job_id', right_on='id')\
-            .groupby('job').size().reset_index(name='count')\
-            .sort_values('count', ascending=False).head(10)
-        
         fig = px.bar(
-            top_jobs,
-            x='count',
-            y='job',
-            orientation='h',
+            top_jobs_df, x='count', y='job', orientation='h',
             title=f'Top 10 Trabajos ({selected_year})',
             labels={'count': 'Contrataciones', 'job': 'Trabajo'},
             color='count',

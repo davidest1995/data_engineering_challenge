@@ -22,9 +22,6 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        #local
-        #logging.FileHandler('../logs/app.log'),
-        #docker
         logging.FileHandler('/app/logs/app.log'),
         logging.StreamHandler()
     ]
@@ -35,11 +32,6 @@ app = Flask(__name__)
 CORS(app)
 
 # Configuración
-#local
-#DB_PATH = '../database/challenge.db'
-#BACKUP_DIR = '../backups'
-#ERROR_LOG_FILE = '../logs/data_errors.log'
-#docker
 DB_SERVER = os.getenv('DB_SERVER')
 DB_NAME = os.getenv('DB_NAME')
 DB_USER = os.getenv('DB_USER')
@@ -127,7 +119,6 @@ def log_error(table: str, row_num: int, reason: str, data: dict):
 def validate_employee(data: dict, row_num: int) -> bool:
     """Validar registro de empleado"""
     import math
-    
     required_fields = ['id', 'name', 'datetime', 'department_id', 'job_id']
     
     # Verificar que todos los campos estén presentes y no vacíos
@@ -489,13 +480,15 @@ def restore_table(table_name: str):
 @app.route('/api/analytics/employees-by-quarter', methods=['GET'])
 def employees_by_quarter():
     """
-    Empleados contratados por trabajo y departamento, dividido por trimestres en 2021
+    Empleados contratados por trabajo y departamento, dividido por trimestres.
+    Acepta parámetro opcional: ?year=2021 (default: 2021)
     Ordenado alfabéticamente por departamento y trabajo
     """
+    year = request.args.get('year', '2021')
     try:
         conn = get_db_connection()
         
-        query = '''
+        query = f'''
         SELECT 
             d.department,
             j.job,
@@ -509,7 +502,7 @@ def employees_by_quarter():
         FROM hired_employees he
         JOIN departments d ON he.department_id = d.id
         JOIN jobs j ON he.job_id = j.id
-        WHERE SUBSTRING(he.datetime, 1, 4) = '2021'
+        WHERE SUBSTRING(he.datetime, 1, 4) = '{year}'
         GROUP BY 
             d.department, 
             j.job, 
@@ -554,7 +547,8 @@ def employees_by_quarter():
             })
         
         return jsonify({
-            'title': 'Empleados contratados por trabajo y departamento, por trimestre (2021)',
+            'year': year,
+            'title': f'Empleados contratados por trabajo y departamento, por trimestre ({year})',
             'data': result
         }), 200
         
@@ -566,21 +560,23 @@ def employees_by_quarter():
 @app.route('/api/analytics/departments-above-mean', methods=['GET'])
 def departments_above_mean():
     """
-    Departamentos que contrataron más empleados que el promedio en 2021
+    Departamentos que contrataron más empleados que el promedio.
+    Acepta parámetro opcional: ?year=2021 (default: 2021)
     Ordenado por número de empleados (descendente)
     """
+    year = request.args.get('year', '2021')
     try:
         conn = get_db_connection()
         
         # Calcular cantidad de empleados por departamento
-        query = '''
+        query = f'''
         SELECT 
             d.id,
             d.department,
             COUNT(*) as hired
         FROM hired_employees he
         JOIN departments d ON he.department_id = d.id
-        WHERE SUBSTRING(he.datetime, 1, 4) = '2021'
+        WHERE SUBSTRING(he.datetime, 1, 4) = '{year}'
         GROUP BY d.id, d.department
         '''
         
@@ -588,7 +584,12 @@ def departments_above_mean():
         conn.close()
         
         if df.empty:
-            return jsonify({'error': 'No hay datos para 2021'}), 400
+            return jsonify({
+                'year': year,
+                'title': f'Departamentos que contrataron más que el promedio en {year}',
+                'mean_hired': 0,
+                'data': []
+            }), 200
         
         # Calcular promedio
         mean_hired = df['hired'].mean()
@@ -605,13 +606,71 @@ def departments_above_mean():
             })
         
         return jsonify({
-            'title': 'Departamentos que contrataron más que el promedio en 2021',
+            'year': year,
+            'title': f'Departamentos que contrataron más que el promedio en {year}',
             'mean_hired': float(mean_hired),
             'data': result
         }), 200
         
     except Exception as e:
         logger.error(f"Error en analytics: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics/top-jobs', methods=['GET'])
+def top_jobs():
+    """
+    Top 10 trabajos más contratados en un año dado (por defecto 2021)
+    Ordenado por número de contrataciones (descendente)
+    """
+    year = request.args.get('year', '2021')
+
+    try:
+        conn = get_db_connection()
+
+        query = f'''
+        SELECT TOP 10
+            j.job,
+            COUNT(*) as count
+        FROM hired_employees he
+        JOIN jobs j ON he.job_id = j.id
+        WHERE SUBSTRING(he.datetime, 1, 4) = '{year}'
+        GROUP BY j.job
+        ORDER BY count DESC
+        '''
+
+        df = pd.read_sql_query(query, conn)
+        conn.close()
+
+        if df.empty:
+            return jsonify({
+                'year': year,
+                'data': []
+            }), 200
+
+        return jsonify({
+            'year': year,
+            'data': df.to_dict(orient='records')
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error en top_jobs: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics/years', methods=['GET'])
+def get_years():
+    """Obtener lista de años únicos con datos de contrataciones"""
+    try:
+        conn = get_db_connection()
+        query = "SELECT DISTINCT SUBSTRING(datetime, 1, 4) as year FROM hired_employees WHERE datetime IS NOT NULL ORDER BY year DESC"
+        df = pd.read_sql_query(query, conn)
+        conn.close()
+        
+        years = [int(y) for y in df['year'].tolist() if y and y.isdigit()]
+        return jsonify({'years': years}), 200
+    except Exception as e:
+        logger.error(f"Error al obtener años: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 

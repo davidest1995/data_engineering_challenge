@@ -3,6 +3,21 @@ backups/
 database/
 logs/
 
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# OS
 .DS_Store
 Thumbs.db
+
+# Secrets
 .env
+.env.*
+!.env.example
