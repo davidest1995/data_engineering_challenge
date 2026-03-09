@@ -23,57 +23,67 @@ st.set_page_config(
 
 # ==================== IDENTIDAD VISUAL GLOBANT ====================
 COLORES_GLOBANT = {
-    'azul_oscuro': '#1A2E6F',
-    'naranja': '#FF8200',
-    'celeste': '#00A3E0',
-    'verde': '#7ED321',
-    'morado': '#A86A9E',
-    'amarillo': '#F5A623',
-    'azul_medio': '#4A90E2',
-    'gris_claro': '#F4F4F4',
-    'gris_oscuro': '#333333'
+    'azul_principal': '#1A4CFF',   # Globant Blue - color más representativo
+    'azul_oscuro':    '#0D1B3A',   # Dark Blue - fondos y textos
+    'fondo':          '#F5F7FA',   # Background gris claro
+    'blanco':         '#FFFFFF',   # Tarjetas y contenedores
+    'teal':           '#00C1B6',   # Acento verde-azulado
+    'coral':          '#FF6B6B',   # Acento coral / alertas
+    'gris_claro':     '#E8ECF2',   # Bordes y separadores
+    'gris_oscuro':    '#4A5568',   # Texto secundario
+    'texto':          '#0D1B3A'    # Texto principal
 }
 
 # Paleta para gráficos (secuencia discreta)
 PALETA_GLOBANT = [
-    COLORES_GLOBANT['azul_oscuro'],
-    COLORES_GLOBANT['naranja'],
-    COLORES_GLOBANT['celeste'],
-    COLORES_GLOBANT['verde'],
-    COLORES_GLOBANT['morado'],
-    COLORES_GLOBANT['amarillo'],
-    COLORES_GLOBANT['azul_medio']
+    COLORES_GLOBANT['azul_principal'],
+    COLORES_GLOBANT['teal'],
+    COLORES_GLOBANT['coral'],
+    '#5B8AF5',   # Azul medio
+    '#2DD4BF',   # Teal claro
+    '#FFA07A',   # Salmón
+    COLORES_GLOBANT['azul_oscuro']
 ]
 
 # CSS personalizado con colores Globant
 st.markdown(f"""
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+        html, body, [class*="css"] {{
+            font-family: 'Inter', sans-serif;
+        }}
         .main {{
             padding: 2rem;
-            background-color: white;
+            background-color: {COLORES_GLOBANT['fondo']};
+        }}
+        .block-container {{
+            background-color: {COLORES_GLOBANT['fondo']};
         }}
         .metric-card {{
-            background-color: {COLORES_GLOBANT['gris_claro']};
+            background-color: {COLORES_GLOBANT['blanco']};
             padding: 1.5rem;
-            border-radius: 0.5rem;
+            border-radius: 0.75rem;
             margin: 0.5rem 0;
-            border-left: 5px solid {COLORES_GLOBANT['naranja']};
+            border-left: 5px solid {COLORES_GLOBANT['azul_principal']};
+            box-shadow: 0 2px 8px rgba(26,76,255,0.08);
         }}
         h1 {{
             color: {COLORES_GLOBANT['azul_oscuro']};
             text-align: center;
             margin-bottom: 1rem;
-            font-weight: 700;
+            font-weight: 800;
         }}
         h2 {{
-            color: {COLORES_GLOBANT['naranja']};
+            color: {COLORES_GLOBANT['azul_principal']};
             margin-top: 2rem;
-            border-bottom: 3px solid {COLORES_GLOBANT['naranja']};
+            border-bottom: 3px solid {COLORES_GLOBANT['azul_principal']};
             padding-bottom: 0.5rem;
-            font-weight: 600;
+            font-weight: 700;
         }}
         h3 {{
             color: {COLORES_GLOBANT['azul_oscuro']};
+            font-weight: 600;
         }}
         .globant-header {{
             display: flex;
@@ -85,10 +95,10 @@ st.markdown(f"""
             font-size: 2.5rem;
             font-weight: 800;
             color: {COLORES_GLOBANT['azul_oscuro']};
-            letter-spacing: 1px;
+            letter-spacing: 2px;
         }}
         .globant-logo span {{
-            color: {COLORES_GLOBANT['naranja']};
+            color: {COLORES_GLOBANT['azul_principal']};
         }}
         .sidebar-header {{
             font-size: 1.5rem;
@@ -98,30 +108,36 @@ st.markdown(f"""
             margin-bottom: 1rem;
         }}
         .stButton>button {{
-            background-color: {COLORES_GLOBANT['azul_oscuro']};
+            background-color: {COLORES_GLOBANT['azul_principal']};
             color: white;
             border: none;
-            border-radius: 5px;
-            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            padding: 0.5rem 1.25rem;
             font-weight: 600;
+            transition: background-color 0.2s ease;
         }}
         .stButton>button:hover {{
-            background-color: {COLORES_GLOBANT['naranja']};
+            background-color: {COLORES_GLOBANT['azul_oscuro']};
             color: white;
         }}
         .stMetric {{
-            background-color: {COLORES_GLOBANT['gris_claro']};
+            background-color: {COLORES_GLOBANT['blanco']};
             padding: 1rem;
-            border-radius: 0.5rem;
-            border-left: 5px solid {COLORES_GLOBANT['celeste']};
+            border-radius: 0.75rem;
+            border-left: 5px solid {COLORES_GLOBANT['teal']};
+            box-shadow: 0 2px 8px rgba(0,193,182,0.1);
         }}
         footer {{
             text-align: center;
             color: {COLORES_GLOBANT['gris_oscuro']};
             font-size: 0.9rem;
             margin-top: 3rem;
-            border-top: 1px solid #ddd;
+            border-top: 2px solid {COLORES_GLOBANT['gris_claro']};
             padding-top: 1rem;
+        }}
+        /* Divider */
+        hr {{
+            border-color: {COLORES_GLOBANT['gris_claro']};
         }}
     </style>
 """, unsafe_allow_html=True)
@@ -277,15 +293,42 @@ def main():
         melted = filtered.melt(id_vars=['department','job'], value_vars=['Q1','Q2','Q3','Q4'],
                                var_name='Quarter', value_name='Employees')
         
+        # Agregación para que plotly no superponga barras
+        if selected_dept != "Todos" and selected_job == "Todos":
+            # Filtrado por departamento, mostrar por trabajo
+            agg_data = melted.groupby(['Quarter', 'job'])['Employees'].sum().reset_index()
+            color_col = 'job'
+            title = f"Empleados por Trimestre - Depto: {selected_dept}"
+        elif selected_job != "Todos" and selected_dept == "Todos":
+            # Filtrado por trabajo, mostrar por departamento
+            agg_data = melted.groupby(['Quarter', 'department'])['Employees'].sum().reset_index()
+            color_col = 'department'
+            title = f"Empleados por Trimestre - Trabajo: {selected_job}"
+        elif selected_dept != "Todos" and selected_job != "Todos":
+            # Ambos filtros
+            agg_data = melted.copy()
+            agg_data['Group'] = agg_data['department'] + " - " + agg_data['job']
+            color_col = 'Group'
+            title = f"Empleados por Trimestre - {selected_dept} & {selected_job}"
+        else:
+            # Todos los datos, agrupado por departamento
+            agg_data = melted.groupby(['Quarter', 'department'])['Employees'].sum().reset_index()
+            color_col = 'department'
+            title = f"Empleados por Trimestre ({selected_year})"
+        
+        # Expandir paleta por si hay muchos grupos
+        num_colors = len(agg_data[color_col].unique())
+        paleta_extendida = (PALETA_GLOBANT * ((num_colors // len(PALETA_GLOBANT)) + 1))[:max(num_colors, 1)]
+        
         fig = px.bar(
-            melted,
+            agg_data,
             x='Quarter',
             y='Employees',
-            color='department',
+            color=color_col,
             barmode='group',
-            title=f"Empleados por Trimestre ({selected_year})",
-            labels={'Employees': 'Número de Empleados', 'Quarter': 'Trimestre'},
-            color_discrete_sequence=PALETA_GLOBANT,
+            title=title,
+            labels={'Employees': 'Número de Empleados', 'Quarter': 'Trimestre', color_col: 'Agrupación'},
+            color_discrete_sequence=paleta_extendida,
             template='plotly_white',
             height=400
         )
@@ -310,16 +353,33 @@ def main():
         col2.metric("🔝 Departamentos sobre Promedio", len(above_mean))
         col3.metric("📈 Máximas Contrataciones", above_mean['hired'].max())
         
+        # Calcular aumento porcentual frente al promedio
+        above_mean = above_mean.copy()
+        above_mean['pct_vs_mean'] = ((above_mean['hired'] - mean_val) / mean_val * 100).round(1)
+        above_mean['text_label'] = above_mean['pct_vs_mean'].apply(lambda x: f"+{x:.1f}%")
+
         fig = px.bar(
             above_mean,
             x='department',
             y='hired',
             color='hired',
+            text='text_label',
+            custom_data=['pct_vs_mean'],
             title=f'Departamentos que Contrataron sobre el Promedio ({selected_year})',
             labels={'hired': 'Número de Empleados', 'department': 'Departamento'},
-            color_continuous_scale=[[0, COLORES_GLOBANT['celeste']], [1, COLORES_GLOBANT['naranja']]],
+            color_continuous_scale=[[0, COLORES_GLOBANT['teal']], [1, COLORES_GLOBANT['azul_principal']]],
             template='plotly_white',
             height=400
+        )
+        fig.update_traces(
+            textposition='outside',
+            textfont=dict(size=11, color=COLORES_GLOBANT['azul_oscuro']),
+            hovertemplate=(
+                "<b>%{x}</b><br>"
+                "Contrataciones: %{y}<br>"
+                "Aumento vs promedio: <b>+%{customdata[0]:.1f}%</b>"
+                "<extra></extra>"
+            )
         )
         fig.add_hline(y=mean_val, line_dash="dash", line_color=COLORES_GLOBANT['azul_oscuro'],
                       annotation_text=f"Promedio: {mean_val:.1f}", annotation_position="right")
@@ -327,7 +387,9 @@ def main():
             hovermode='x',
             font=dict(size=12),
             xaxis_tickangle=-45,
-            title_font_color=COLORES_GLOBANT['azul_oscuro']
+            title_font_color=COLORES_GLOBANT['azul_oscuro'],
+            uniformtext_minsize=9,
+            uniformtext_mode='hide'
         )
         st.plotly_chart(fig, use_container_width=True)
     
@@ -350,7 +412,7 @@ def main():
             title=f'Top 10 Trabajos ({selected_year})',
             labels={'count': 'Contrataciones', 'job': 'Trabajo'},
             color='count',
-            color_continuous_scale=[[0, COLORES_GLOBANT['celeste']], [1, COLORES_GLOBANT['azul_oscuro']]],
+            color_continuous_scale=[[0, COLORES_GLOBANT['teal']], [1, COLORES_GLOBANT['azul_oscuro']]],
             template='plotly_white',
             height=400
         )
@@ -364,7 +426,7 @@ def main():
     st.markdown(f"""
         <footer>
             <b style='color: {COLORES_GLOBANT["azul_oscuro"]}'>Globant</b> Challenge - Dashboard Interactivo<br>
-            <span style='color: {COLORES_GLOBANT["naranja"]}'>#BeGlobant</span> | Data driven decisions
+            <span style='color: {COLORES_GLOBANT["azul_principal"]}'>#BeGlobant</span> | Data driven decisions
         </footer>
     """, unsafe_allow_html=True)
 
